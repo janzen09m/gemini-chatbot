@@ -1,4 +1,4 @@
-const API_KEY = "DEIN_API_KEY_HIER";
+const API_KEY = "AIzaSyBVdOUZ5ErCUhr8ezyfTcsP7egkxKRmrac";
 
 async function sendMessage() {
   const input = document.getElementById("userInput");
@@ -52,3 +52,4 @@ function addMessage(sender, text, className) {
   messages.appendChild(div);
   messages.scrollTop = messages.scrollHeight;
 }
+
