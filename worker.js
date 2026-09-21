@@ -124,10 +124,13 @@ async function callGemini(apiKey, prompt) {
     throw new Error("Der hinterlegte Gemini-Schlüssel ist gesperrt. Bitte erstelle einen neuen Schlüssel auf Google AI Studio.");
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
+    },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }]
     })
