@@ -2,8 +2,8 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 1. Telegram Webhook (POST auf / oder /webhook)
-    if (request.method === "POST" && (url.pathname === "/" || url.pathname === "/webhook")) {
+    // 1. Telegram Webhook (POST auf /, /webhook oder beliebigen Pfad außer /api/chat)
+    if (request.method === "POST" && url.pathname !== "/api/chat") {
       return handleTelegram(request, env);
     }
 
@@ -86,16 +86,27 @@ async function handleTelegram(request, env) {
         return new Response("OK");
       }
 
-      // Gemini aufrufen
-      const reply = await callGemini(env.GEMINI_API_KEY, text);
+      // Gemini aufrufen mit Tipp-Status und Fehler-Rückmeldung
+      try {
+        await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, action: "typing" })
+        });
 
-      // An Telegram senden (Nachrichten bei >4000 Zeichen aufteilen)
-      if (reply.length <= 4000) {
-        await sendTelegram(token, chatId, reply);
-      } else {
-        for (let i = 0; i < reply.length; i += 4000) {
-          await sendTelegram(token, chatId, reply.slice(i, i + 4000));
+        const reply = await callGemini(env.GEMINI_API_KEY, text);
+
+        // An Telegram senden (Nachrichten bei >4000 Zeichen aufteilen)
+        if (reply.length <= 4000) {
+          await sendTelegram(token, chatId, reply);
+        } else {
+          for (let i = 0; i < reply.length; i += 4000) {
+            await sendTelegram(token, chatId, reply.slice(i, i + 4000));
+          }
         }
+      } catch (geminiErr) {
+        console.error("Gemini Fehler:", geminiErr.message);
+        await sendTelegram(token, chatId, `⚠️ Fehler bei Gemini: ${geminiErr.message}`);
       }
     }
 
@@ -160,13 +171,28 @@ async function callGemini(apiKey, prompt) {
 
 async function sendTelegram(token, chatId, text, isMarkdown = false) {
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text,
-      parse_mode: isMarkdown ? "Markdown" : undefined
-    })
-  });
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: isMarkdown ? "Markdown" : undefined
+      })
+    });
+    const data = await res.json();
+    if (!data.ok && isMarkdown) {
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: text
+        })
+      });
+    }
+  } catch (err) {
+    console.error("sendTelegram Error:", err);
+  }
 }
