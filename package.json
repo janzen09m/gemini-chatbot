@@ -1,0 +1,17 @@
+{
+  "name": "gemini-chatbot",
+  "version": "1.0.0",
+  "description": "Gemini Chatbot",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "echo 'Build complete'",
+    "start": "node server.js",
+    "lint": "node --check server.js"
+  },
+  "dependencies": {
+    "@google/genai": "latest",
+    "express": "^4.21.2"
+  }
+}
