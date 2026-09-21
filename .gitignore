@@ -2,3 +2,5 @@ node_modules/
 .env
 .wrangler/
 dist/
+bun.lock
+bun.lockb
