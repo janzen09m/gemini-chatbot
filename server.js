@@ -61,7 +61,7 @@ let telegramBot = null;
 let telegramBotInfo = null;
 let telegramError = null;
 
-function initTelegramBot() {
+async function initTelegramBot() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !token.trim()) {
     console.log("Telegram Bot Token nicht gesetzt. Web-Interface läuft normal.");
@@ -72,6 +72,21 @@ function initTelegramBot() {
   }
 
   try {
+    // Check if webhook is active (e.g. on Cloudflare Worker)
+    try {
+      const whRes = await fetch(`https://api.telegram.org/bot${token.trim()}/getWebhookInfo`);
+      const whData = await whRes.json();
+      if (whData.ok && whData.result?.url) {
+        console.log(`Telegram Bot nutzt Webhook auf: ${whData.result.url}. Kein lokales Polling.`);
+        const meRes = await fetch(`https://api.telegram.org/bot${token.trim()}/getMe`);
+        const meData = await meRes.json();
+        if (meData.ok) telegramBotInfo = meData.result;
+        return; // Cloudflare handles the bot!
+      }
+    } catch (e) {
+      // ignore
+    }
+
     telegramBot = new Bot(token.trim());
 
     // /start command
