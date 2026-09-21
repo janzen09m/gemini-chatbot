@@ -14,6 +14,19 @@ export default {
 
     // 3. Status API
     if (url.pathname === "/api/status") {
+      let botUsername = null;
+      if (env.TELEGRAM_BOT_TOKEN) {
+        try {
+          const meRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
+          const meData = await meRes.json();
+          if (meData.ok && meData.result?.username) {
+            botUsername = meData.result.username;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
       return new Response(JSON.stringify({
         gemini: {
           hasKey: !!env.GEMINI_API_KEY,
@@ -22,7 +35,8 @@ export default {
         },
         telegram: {
           hasToken: !!env.TELEGRAM_BOT_TOKEN,
-          isRunning: true,
+          isRunning: !!env.TELEGRAM_BOT_TOKEN,
+          username: botUsername,
           mode: "webhook"
         }
       }), {

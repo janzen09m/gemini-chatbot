@@ -17,7 +17,7 @@ async function checkStatus() {
       geminiBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Gemini: Key gesperrt</span>';
     } else {
       geminiBadge.className = "status-badge status-warning";
-      geminiBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Gemini: Key fehlt (.env)</span>';
+      geminiBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Gemini: Key fehlt</span>';
     }
 
     // Update Telegram Status Badge
@@ -30,12 +30,12 @@ async function checkStatus() {
         openTgBtn.textContent = `@${data.telegram.username} in Telegram öffnen`;
         tgLinkWrap.style.display = "block";
       }
-    } else if (data.telegram?.hasToken) {
-      telegramBadge.className = "status-badge status-warning";
-      telegramBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Telegram: Verbinde...</span>';
+    } else if (data.telegram?.isRunning || data.telegram?.hasToken) {
+      telegramBadge.className = "status-badge status-success";
+      telegramBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Telegram: Bot aktiv</span>';
     } else {
       telegramBadge.className = "status-badge status-warning";
-      telegramBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Telegram: Token fehlt (.env)</span>';
+      telegramBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Telegram: Token fehlt</span>';
       if (tgLinkWrap) tgLinkWrap.style.display = "none";
     }
 
