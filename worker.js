@@ -149,24 +149,48 @@ async function callGemini(apiKey, prompt) {
     throw new Error("Der hinterlegte Gemini-Schlüssel ist gesperrt. Bitte erstelle einen neuen Schlüssel auf Google AI Studio.");
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey
-    },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
-    })
-  });
+  // Model fallback list: if a model is experiencing high demand, try the next one
+  const candidateModels = [
+    "gemini-3.8-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.6-flash"
+  ];
 
-  const data = await res.json();
-  if (!res.ok || data.error) {
-    throw new Error(data.error?.message || "Fehler von der Gemini API");
+  let lastError = null;
+  for (const model of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        const errMsg = data.error?.message || `HTTP ${res.status}`;
+        lastError = new Error(errMsg);
+        // If high demand or overloaded or 503/429, try next model
+        if (errMsg.includes("demand") || errMsg.includes("overloaded") || res.status === 503 || res.status === 429) {
+          continue;
+        }
+        throw lastError;
+      }
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text;
+    } catch (err) {
+      lastError = err;
+    }
   }
 
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "Keine Antwort von Gemini erhalten.";
+  throw lastError || new Error("Keine Antwort von Gemini erhalten.");
 }
 
 async function sendTelegram(token, chatId, text, isMarkdown = false) {
