@@ -17,7 +17,7 @@ export default {
       let botUsername = null;
       if (env.TELEGRAM_BOT_TOKEN) {
         try {
-          const meRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
+          const meRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN.trim()}/getMe`);
           const meData = await meRes.json();
           if (meData.ok && meData.result?.username) {
             botUsername = meData.result.username;
@@ -44,6 +44,48 @@ export default {
       });
     }
 
+    // 4. Webhook Setup & Info API (1-Klick Aktivierung)
+    if (url.pathname === "/api/setup-webhook") {
+      const token = env.TELEGRAM_BOT_TOKEN?.trim();
+      if (!token) {
+        return new Response(JSON.stringify({ ok: false, error: "TELEGRAM_BOT_TOKEN fehlt in Cloudflare Secrets" }), {
+          headers: { "Content-Type": "application/json" },
+          status: 400
+        });
+      }
+
+      const webhookUrl = `${url.origin}/`;
+      const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}&drop_pending_updates=true`);
+      const setData = await setRes.json();
+
+      const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+      const infoData = await infoRes.json();
+
+      return new Response(JSON.stringify({
+        ok: setData.ok,
+        message: setData.ok ? "Webhook erfolgreich aktiviert!" : "Fehler beim Setzen des Webhooks",
+        webhookResult: setData,
+        webhookInfo: infoData,
+        registeredUrl: webhookUrl
+      }, null, 2), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (url.pathname === "/api/webhook-info") {
+      const token = env.TELEGRAM_BOT_TOKEN?.trim();
+      if (!token) {
+        return new Response(JSON.stringify({ ok: false, error: "TELEGRAM_BOT_TOKEN fehlt" }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+      const infoData = await infoRes.json();
+      return new Response(JSON.stringify(infoData, null, 2), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     // 4. Static Assets (Website)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
@@ -55,7 +97,7 @@ export default {
 
 async function handleTelegram(request, env) {
   try {
-    const token = env.TELEGRAM_BOT_TOKEN;
+    const token = env.TELEGRAM_BOT_TOKEN?.trim();
     if (!token) {
       return new Response("TELEGRAM_BOT_TOKEN fehlt", { status: 200 });
     }
@@ -77,7 +119,7 @@ async function handleTelegram(request, env) {
       }
 
       if (text === "/status") {
-        const hasKey = !!env.GEMINI_API_KEY;
+        const hasKey = !!env.GEMINI_API_KEY?.trim();
         await sendTelegram(token, chatId, hasKey ? "✅ Gemini API ist konfiguriert und einsatzbereit!" : "⚠️ GEMINI_API_KEY fehlt in den Cloudflare Worker Secrets.");
         return new Response("OK");
       }
@@ -94,7 +136,7 @@ async function handleTelegram(request, env) {
           body: JSON.stringify({ chat_id: chatId, action: "typing" })
         });
 
-        const reply = await callGemini(env.GEMINI_API_KEY, text);
+        const reply = await callGemini(env.GEMINI_API_KEY?.trim(), text);
 
         // An Telegram senden (Nachrichten bei >4000 Zeichen aufteilen)
         if (reply.length <= 4000) {
@@ -124,7 +166,7 @@ async function handleWebChat(request, env) {
       return new Response(JSON.stringify({ error: "Nachricht fehlt" }), { status: 400 });
     }
 
-    const reply = await callGemini(env.GEMINI_API_KEY, message);
+    const reply = await callGemini(env.GEMINI_API_KEY?.trim(), message);
     return new Response(JSON.stringify({
       reply,
       candidates: [{ content: { parts: [{ text: reply }] } }]
