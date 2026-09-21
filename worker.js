@@ -22,9 +22,7 @@ export default {
           if (meData.ok && meData.result?.username) {
             botUsername = meData.result.username;
           }
-        } catch (e) {
-          // ignore
-        }
+        } catch (e) {}
       }
 
       return new Response(JSON.stringify({
@@ -44,49 +42,23 @@ export default {
       });
     }
 
-    // 4. Webhook Setup & Info API (1-Klick Aktivierung)
+    // 4. Webhook Setup API
     if (url.pathname === "/api/setup-webhook") {
-      const token = env.TELEGRAM_BOT_TOKEN?.trim();
-      if (!token) {
-        return new Response(JSON.stringify({ ok: false, error: "TELEGRAM_BOT_TOKEN fehlt in Cloudflare Secrets" }), {
-          headers: { "Content-Type": "application/json" },
-          status: 400
-        });
-      }
-
-      const webhookUrl = `${url.origin}/`;
-      const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}&drop_pending_updates=true`);
-      const setData = await setRes.json();
-
-      const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
-      const infoData = await infoRes.json();
-
-      return new Response(JSON.stringify({
-        ok: setData.ok,
-        message: setData.ok ? "Webhook erfolgreich aktiviert!" : "Fehler beim Setzen des Webhooks",
-        webhookResult: setData,
-        webhookInfo: infoData,
-        registeredUrl: webhookUrl
-      }, null, 2), {
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    if (url.pathname === "/api/webhook-info") {
       const token = env.TELEGRAM_BOT_TOKEN?.trim();
       if (!token) {
         return new Response(JSON.stringify({ ok: false, error: "TELEGRAM_BOT_TOKEN fehlt" }), {
           headers: { "Content-Type": "application/json" }
         });
       }
-      const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
-      const infoData = await infoRes.json();
-      return new Response(JSON.stringify(infoData, null, 2), {
+      const webhookUrl = `${url.origin}/`;
+      const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}&drop_pending_updates=true`);
+      const setData = await setRes.json();
+      return new Response(JSON.stringify(setData, null, 2), {
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    // 4. Static Assets (Website)
+    // 5. Static Assets (Website)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
@@ -128,7 +100,7 @@ async function handleTelegram(request, env) {
         return new Response("OK");
       }
 
-      // Gemini aufrufen mit Tipp-Status und Fehler-Rückmeldung
+      // Tipp-Status senden
       try {
         await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
           method: "POST",
@@ -138,7 +110,6 @@ async function handleTelegram(request, env) {
 
         const reply = await callGemini(env.GEMINI_API_KEY?.trim(), text);
 
-        // An Telegram senden (Nachrichten bei >4000 Zeichen aufteilen)
         if (reply.length <= 4000) {
           await sendTelegram(token, chatId, reply);
         } else {
@@ -147,14 +118,12 @@ async function handleTelegram(request, env) {
           }
         }
       } catch (geminiErr) {
-        console.error("Gemini Fehler:", geminiErr.message);
-        await sendTelegram(token, chatId, `⚠️ Fehler bei Gemini: ${geminiErr.message}`);
+        await sendTelegram(token, chatId, `⚠️ Gemini Hinweis: ${geminiErr.message}`);
       }
     }
 
     return new Response("OK", { status: 200 });
   } catch (err) {
-    console.error("Telegram Webhook Fehler:", err);
     return new Response("OK", { status: 200 });
   }
 }
@@ -185,13 +154,10 @@ async function handleWebChat(request, env) {
 
 async function callGemini(apiKey, prompt) {
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY ist in Cloudflare Secrets nicht hinterlegt.");
-  }
-  if (apiKey === "AIzaSyBVdOUZ5ErCUhr8ezyfTcsP7egkxKRmrac") {
-    throw new Error("Der hinterlegte Gemini-Schlüssel ist gesperrt. Bitte erstelle einen neuen Schlüssel auf Google AI Studio.");
+    throw new Error("GEMINI_API_KEY fehlt in Cloudflare Secrets.");
   }
 
-  // Model fallback list: if a model is experiencing high demand, try the next one
+  // Automatischer Wechsel auf funktionierendes Modell bei Überlastung
   const candidateModels = [
     "gemini-3.8-flash",
     "gemini-3.1-flash-lite",
@@ -218,7 +184,6 @@ async function callGemini(apiKey, prompt) {
       if (!res.ok || data.error) {
         const errMsg = data.error?.message || `HTTP ${res.status}`;
         lastError = new Error(errMsg);
-        // If high demand or overloaded or 503/429, try next model
         if (errMsg.includes("demand") || errMsg.includes("overloaded") || res.status === 503 || res.status === 429) {
           continue;
         }
@@ -252,13 +217,8 @@ async function sendTelegram(token, chatId, text, isMarkdown = false) {
       await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: text
-        })
+        body: JSON.stringify({ chat_id: chatId, text: text })
       });
     }
-  } catch (err) {
-    console.error("sendTelegram Error:", err);
-  }
+  } catch (e) {}
 }
